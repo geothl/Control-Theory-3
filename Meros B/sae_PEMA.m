@@ -1,0 +1,121 @@
+function sae_PEMA(a1,b1,a2,b2,eisodos)
+tspan = [0 45];
+x0=[0;0;0;0;];
+xm0=[0;0;0;0;];
+xe0=xm0-x0;
+dynamic0=[xe0;0;0;]; %to include the derivatives of the intergals 
+if(eisodos==1)
+qd1=@(tx) (pi/6)*square(tx);
+qd2=@(tx) (pi/6)*square(tx);
+qd1_d=@(tx) 0;
+qd2_d=@(tx) 0;
+qd1_dd=@(tx) 0;
+qd2_dd=@(tx) 0;
+end
+if(eisodos==2)
+qd1=@(tx) pi/3+(pi/3)*sin(0.4*pi*tx);
+qd2=@(tx) -pi/4+(pi/6)*sin(0.3*pi*tx);
+qd1_d=@(tx) (pi/3)*0.4*pi*cos(0.4*pi*tx);
+qd2_d=@(tx) (pi/6)*0.3*pi*cos(0.3*pi*tx);
+qd1_dd=@(tx) -(pi/3)*(0.4*pi)^2*sin(0.4*pi*tx);
+qd2_dd=@(tx) -(pi/6)*(0.3*pi)^2*sin(0.3*pi*tx);
+end
+
+% options = odeset('RelTol',1e-8,'AbsTol',1e-10,'Refine',10);
+[t,dynamic] = ode45(@(t,dynamic) F_PEMA(t,dynamic,qd1,qd2,a1,b1,a2,b2), tspan,zeros(32,1));
+x1=dynamic(:,1);
+x2=dynamic(:,2);
+x3=dynamic(:,3);
+x4=dynamic(:,4);
+x1m=dynamic(:,29);
+x2m=dynamic(:,30);
+x3m=dynamic(:,31);
+x4m=dynamic(:,32);
+ip=dynamic(:,5:20);
+ipm=dynamic(:,21:28);
+for i=1:length(t)
+ipcel{i}=reshape(ip(i,:),[4,4]);
+ipmcel{i}=reshape(ipm(i,:),[4,2]);
+end
+
+
+
+figure;
+plot(t,x1,t,qd1(t),t,dynamic(:,29),'LineWidth',0.4);
+title("Χρονική απόκριση γωνίας q1(t) της πρώτης άρθρωσης και επιθυμητής τροχίας qd1(t) και μοντέλου qm1")
+legend('q1','qd1','qm1');
+xlabel("Time: t in seconds")
+ylabel('q1 in rad')
+figure;
+plot(t,x2,t,qd2(t),t,dynamic(:,30));
+title("Χρονική απόκριση γωνίας q2(t) της πρώτης άρθρωσης και επιθυμητής τροχίας qd2(t) και μοντέλου qm2")
+legend('q2','qd2','qm2');
+xlabel("Time: t in seconds")
+ylabel('q2 in rad')
+
+Am=[0 0 1 0;0 0 0 1;-16 0 -8 0;0 -16 0 -8;];
+  Bm=[0 0;0 0;16 0;0 16;];
+  B=eye(4);
+  Q=eye(4);
+  Ce=transpose(B)*lyap(transpose(Am),Q);
+
+for k=1:length(t)
+   xu=[x1(k);x2(k);x3(k);x4(k);];
+   ru=[qd1(t(k));qd2(t(k));];  
+  xe=[x1m(k)-x1(k);x2m(k)-x2(k);x3m(k)-x3(k);x4m(k)-x4(k);];
+  ye=Ce*xe;
+  Kp_norm(k)=norm(a1*ipcel{k}+b1*ye*transpose(xu));
+  Kpm_norm(k)=norm(a2*ipmcel{k}+b2*ye*transpose(ru));
+  u{k}=u_calc(xu,ru,ye,ipcel{k},ipmcel{k},a1,b1,a2,b2);
+end
+
+
+for i=1:length(u)
+    u1(i)=double(u{i}(1)); 
+    u2(i)=double(u{i}(2));    
+end
+
+figure;
+e1=x1-qd1(t);
+e2=x2-qd2(t);
+subplot(2,2,[1 2])
+plot(e1,e2);
+title("Σφάλμα στο φασικό επίπεδο")
+xlabel("Σφάλμα e1 για την πρώτη άθρωση (rad)")
+ylabel("Σφάλμα e2 για την δεύτερη άθρωση (rad)")
+grid on;
+
+subplot(2,2,3)
+plot(t,e1)
+title("Σφάλμα e1 για την πρώτη άθρωση")
+xlabel("Time: t in seconds")
+ylabel("e1 (rad)")
+grid on;
+
+subplot(2,2,4)
+plot(t,e2)
+title("Σφάλμα e2 για την δεύτερη άθρωση")
+xlabel("Time: t in seconds")
+ylabel("e2 (rad)")
+grid on;
+
+
+
+
+
+figure;
+plot(t,u1,t,u2)
+title("Είσοδος Ελέγχου u")
+legend("u1","u2")
+xlabel("Time: t in seconds")
+ylabel("Torque: u in N*m")
+
+
+
+
+figure;
+plot(t,Kp_norm,t,Kpm_norm);
+title("Νόρμα πινάκων προσαρμοστικών κερδών ||Κp|| και ||Kpm||")
+legend("||Κp||","||Kpm||")
+xlabel("Time: t in seconds")
+ylabel("Μέτρο Νόρμας")
